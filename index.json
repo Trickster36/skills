@@ -1,3 +1,15 @@
 {
-  "goals": []
+  "goals": [
+    {
+      "id": "goal_c7f660cc-5df5-4511-a67d-76a2e196d951",
+      "title": "Conversation Skills",
+      "comfort": 0,
+      "streak": {
+        "current": 0,
+        "longest": 0,
+        "lastCheckIn": null
+      },
+      "activeLeafTitle": "Getting started"
+    }
+  ]
 }
