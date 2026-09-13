@@ -125,49 +125,65 @@ async function loadGoal(config, goalId) {
 }
 
 /**
- * Saves a goal (single batched write — call this once per session/edit,
- * not per field change) and keeps the index summary in sync.
- * `existingSha` is the goal file's previous sha, if updating.
+ * Saves a goal (single batched write) and keeps the index summary in
+ * sync. `existingSha` is the goal file's previous sha, if updating.
+ *
+ * `cachedIndex` (optional) — pass an already-loaded { goals, sha } to
+ * skip re-fetching the index from the network. If omitted, this fetches
+ * it in parallel with the goal write (independent requests) instead of
+ * after it, cutting the round trips from 3 sequential to 2.
+ *
+ * Returns { goalSha, indexGoals, indexSha } so callers can update their
+ * own in-memory index cache without an extra network round trip.
  */
-async function saveGoal(config, goal, existingSha) {
-  const goalResult = await writeFile(
-    config,
-    `goals/${goal.id}.json`,
-    goal,
-    existingSha,
-    `Update goal: ${goal.title}`
-  );
-
-  const { goals, sha: indexSha } = await loadIndex(config);
-  const activeLeaf = findActiveLeaf(goal);
+async function saveGoal(config, goal, existingSha, cachedIndex) {
   const summary = {
     id: goal.id,
     title: goal.title,
     comfort: getComfort(goal),
     streak: goal.streak,
-    activeLeafTitle: activeLeaf ? activeLeaf.title : null,
+    activeLeafTitle: findActiveLeaf(goal)?.title ?? null,
   };
+
+  const [goalResult, indexState] = await Promise.all([
+    writeFile(config, `goals/${goal.id}.json`, goal, existingSha, `Update goal: ${goal.title}`),
+    cachedIndex ? Promise.resolve(cachedIndex) : loadIndex(config),
+  ]);
+
+  const goals = [...indexState.goals];
   const idx = goals.findIndex((g) => g.id === goal.id);
   if (idx === -1) {
     goals.push(summary);
   } else {
     goals[idx] = summary;
   }
-  await saveIndex(config, goals, indexSha);
+  const indexResult = await saveIndex(config, goals, indexState.sha);
 
-  return goalResult.content.sha; // new sha, keep for the next save
+  return {
+    goalSha: goalResult.content.sha,
+    indexGoals: goals,
+    indexSha: indexResult.content.sha,
+  };
 }
 
-async function deleteGoal(config, goalId) {
+/**
+ * Deletes a goal. `cachedIndex` (optional) skips re-fetching the index,
+ * same as saveGoal. Returns { indexGoals, indexSha }, or null if the
+ * goal didn't exist.
+ */
+async function deleteGoal(config, goalId, cachedIndex) {
   const existing = await loadGoal(config, goalId);
-  if (!existing) return;
+  if (!existing) return null;
 
-  const fileMeta = await readFile(config, `goals/${goalId}.json`);
-  await deleteFile(config, `goals/${goalId}.json`, fileMeta.sha, `Delete goal: ${goalId}`);
+  // `existing.sha` already came from loadGoal's single read — no need
+  // for a second readFile just to get the same sha again.
+  await deleteFile(config, `goals/${goalId}.json`, existing.sha, `Delete goal: ${goalId}`);
 
-  const { goals, sha: indexSha } = await loadIndex(config);
-  const filtered = goals.filter((g) => g.id !== goalId);
-  await saveIndex(config, filtered, indexSha);
+  const indexState = cachedIndex || (await loadIndex(config));
+  const filtered = indexState.goals.filter((g) => g.id !== goalId);
+  const indexResult = await saveIndex(config, filtered, indexState.sha);
+
+  return { indexGoals: filtered, indexSha: indexResult.content.sha };
 }
 
 export { loadIndex, saveIndex, loadGoal, saveGoal, deleteGoal };
