@@ -1,8 +1,18 @@
-// Step 8: wires everything together.
+// Step 8 (revised for performance): wires everything together.
 //   settings.js       -> where the GitHub config lives (localStorage)
 //   github-storage.js -> loading/saving goals
 //   logic.js          -> checkIn, deleteNode, findActiveLeaf
 //   screens/*         -> pure UI, called here with real callbacks
+//
+// Performance notes (this revision): every GitHub API call is a real
+// network round trip, so avoiding redundant ones matters a lot for
+// perceived speed.
+//   - The index (goal list) is cached in memory (`indexCache`) after
+//     first load. saveGoal/deleteGoal return the updated index, so we
+//     update the cache locally instead of re-fetching it.
+//   - After a check-in or add-section inside the tree view, we already
+//     have the fully up-to-date goal object and its new sha in memory —
+//     we re-render from that directly instead of calling loadGoal again.
 //
 // initApp() is exported (not auto-run) so this file can be unit tested
 // in Node with jsdom. The bottom of the file auto-runs it in a real
@@ -25,6 +35,7 @@ function todayISO() {
 
 function initApp(root) {
   let config = getStoredConfig();
+  let indexCache = null; // { goals, sha } — populated on first load, kept in sync locally after that
 
   function ensureConfigThen(next) {
     if (config) {
@@ -41,8 +52,10 @@ function initApp(root) {
   }
 
   async function showHome() {
-    const { goals: summaries } = await loadIndex(config);
-    renderHomeScreen(root, summaries, {
+    if (!indexCache) {
+      indexCache = await loadIndex(config); // only ever hits the network once per session
+    }
+    renderHomeScreen(root, indexCache.goals, {
       onCreateGoal: handleCreateGoal,
       onCheckIn: handleQuickCheckIn,
       onViewTree: showTree,
@@ -58,8 +71,9 @@ function initApp(root) {
         // first section starts unlocked so there's something to check in on
         const firstSection = createNode({ title: 'Getting started', unlocked: true });
         goal.children.push(firstSection);
-        await saveGoal(config, goal);
-        showHome();
+        const result = await saveGoal(config, goal, undefined, indexCache);
+        indexCache = { goals: result.indexGoals, sha: result.indexSha };
+        showHome(); // renders from the cache we just updated — no extra fetch
       },
     });
   }
@@ -67,62 +81,79 @@ function initApp(root) {
   async function showTree(goalId) {
     const result = await loadGoal(config, goalId);
     if (!result) return showHome();
-    const { goal, sha } = result;
+    let { goal, sha } = result; // `sha` is reassigned after each save below
 
-    renderTreeScreen(root, goal, {
-      onBack: showHome,
-      onCheckIn: (nodeId) => handleCheckIn(goal, sha, nodeId),
-      onAddTopLevelSection: () => handleAddSection(goal, sha, goal),
-      onAddChild: (parentNodeId) => {
-        const parent = findNodeById(goal, parentNodeId);
-        if (parent) handleAddSection(goal, sha, parent);
-      },
-    });
-  }
+    function render() {
+      renderTreeScreen(root, goal, {
+        onBack: showHome,
+        onCheckIn: handleCheckIn,
+        onAddTopLevelSection: () => handleAddSection(goal),
+        onAddChild: (parentNodeId) => {
+          const parent = findNodeById(goal, parentNodeId);
+          if (parent) handleAddSection(parent);
+        },
+      });
+    }
 
-  function handleAddSection(goal, sha, parentNode) {
-    openAddSectionModal(root, {
-      onSave: async (title) => {
-        addChildNode(parentNode, title);
-        await saveGoal(config, goal, sha);
-        showTree(goal.id);
-      },
-    });
-  }
+    function handleAddSection(parentNode) {
+      openAddSectionModal(root, {
+        onSave: async (title) => {
+          addChildNode(parentNode, title);
+          const result = await saveGoal(config, goal, sha, indexCache);
+          sha = result.goalSha;
+          indexCache = { goals: result.indexGoals, sha: result.indexSha };
+          render(); // re-render from the goal object we already have — no re-fetch
+        },
+      });
+    }
 
-  function handleCheckIn(goal, sha, nodeId) {
-    const node = findNodeById(goal, nodeId);
-    if (!node) return;
-    openCheckInModal(root, node, {
-      onCancel: () => showTree(goal.id),
-      onSave: async (comfort, note) => {
-        checkIn(goal, nodeId, comfort, note, todayISO());
-        await saveGoal(config, goal, sha);
-        showTree(goal.id); // re-render with fresh state (unlock, comfort, streak)
-      },
-    });
+    function handleCheckIn(nodeId) {
+      const node = findNodeById(goal, nodeId);
+      if (!node) return;
+      openCheckInModal(root, node, {
+        onCancel: render,
+        onSave: async (comfort, note) => {
+          checkIn(goal, nodeId, comfort, note, todayISO());
+          const result = await saveGoal(config, goal, sha, indexCache);
+          sha = result.goalSha;
+          indexCache = { goals: result.indexGoals, sha: result.indexSha };
+          render(); // re-render with fresh state (unlock, comfort, streak) — no re-fetch
+        },
+      });
+    }
+
+    render();
   }
 
   async function handleQuickCheckIn(goalId) {
-    const result = await loadGoal(config, goalId);
+    const result = await loadGoal(config, goalId); // unavoidable: home only has the summary
     if (!result) return;
     const { goal, sha } = result;
     const activeLeaf = findActiveLeaf(goal);
     if (!activeLeaf) return showHome();
-    handleCheckIn(goal, sha, activeLeaf.id);
+
+    openCheckInModal(root, activeLeaf, {
+      onCancel: showHome,
+      onSave: async (comfort, note) => {
+        checkIn(goal, activeLeaf.id, comfort, note, todayISO());
+        const saveResult = await saveGoal(config, goal, sha, indexCache);
+        indexCache = { goals: saveResult.indexGoals, sha: saveResult.indexSha };
+        showHome();
+      },
+    });
   }
 
-  async function handleEdit(goalId) {
-    // Minimal for now: editing the tree structure (adding sections,
-    // renaming) isn't a designed screen yet — flagged as a follow-up.
-    // For now, "edit" just opens the tree view.
+  function handleEdit(goalId) {
+    // Minimal for now: renaming/restructuring isn't a designed screen
+    // yet — flagged as a follow-up. For now, "edit" just opens the tree.
     showTree(goalId);
   }
 
   async function handleDelete(goalId) {
     const confirmed = confirm('Delete this goal? This cannot be undone.');
     if (!confirmed) return;
-    await deleteGoal(config, goalId);
+    const result = await deleteGoal(config, goalId, indexCache);
+    if (result) indexCache = { goals: result.indexGoals, sha: result.indexSha };
     showHome();
   }
 
