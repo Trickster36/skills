@@ -1,0 +1,15 @@
+{
+  "goals": [
+    {
+      "id": "goal_3006bd76-061f-44ee-b5be-b757be2aa94d",
+      "title": "Conversation Skills",
+      "comfort": 0,
+      "streak": {
+        "current": 0,
+        "longest": 0,
+        "lastCheckIn": null
+      },
+      "activeLeafTitle": "Getting started"
+    }
+  ]
+}
