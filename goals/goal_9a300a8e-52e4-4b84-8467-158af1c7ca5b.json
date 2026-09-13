@@ -49,6 +49,20 @@
               },
               "checkIns": [],
               "children": []
+            },
+            {
+              "id": "node_4d0abb6b-7983-4a5d-b0a9-5f99b15a5770",
+              "title": "Initiating Interaction",
+              "comfort": 0,
+              "unlocked": false,
+              "unlockedAt": null,
+              "streak": {
+                "current": 0,
+                "longest": 0,
+                "lastCheckIn": null
+              },
+              "checkIns": [],
+              "children": []
             }
           ]
         }
