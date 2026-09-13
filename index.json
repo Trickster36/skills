@@ -3,11 +3,11 @@
     {
       "id": "goal_9a300a8e-52e4-4b84-8467-158af1c7ca5b",
       "title": "Conversation Skills",
-      "comfort": 0,
+      "comfort": 3,
       "streak": {
-        "current": 0,
-        "longest": 0,
-        "lastCheckIn": null
+        "current": 1,
+        "longest": 1,
+        "lastCheckIn": "2026-09-13"
       },
       "activeLeafTitle": "Being comfortable around people"
     }
