@@ -35,7 +35,22 @@
             "lastCheckIn": null
           },
           "checkIns": [],
-          "children": []
+          "children": [
+            {
+              "id": "node_db6d11c2-c078-4b7c-bf75-ff1debcd2a93",
+              "title": "Being comfortable around people",
+              "comfort": 0,
+              "unlocked": true,
+              "unlockedAt": "2026-09-13",
+              "streak": {
+                "current": 0,
+                "longest": 0,
+                "lastCheckIn": null
+              },
+              "checkIns": [],
+              "children": []
+            }
+          ]
         }
       ]
     },
