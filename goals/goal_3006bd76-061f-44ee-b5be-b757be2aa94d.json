@@ -1,0 +1,28 @@
+{
+  "id": "goal_3006bd76-061f-44ee-b5be-b757be2aa94d",
+  "title": "Conversation Skills",
+  "description": "",
+  "createdAt": "2026-09-13",
+  "comfort": 0,
+  "streak": {
+    "current": 0,
+    "longest": 0,
+    "lastCheckIn": null
+  },
+  "children": [
+    {
+      "id": "node_d372749e-589d-4f8e-a8bb-b3dcad9bb110",
+      "title": "Getting started",
+      "comfort": 0,
+      "unlocked": true,
+      "unlockedAt": "2026-09-13",
+      "streak": {
+        "current": 0,
+        "longest": 0,
+        "lastCheckIn": null
+      },
+      "checkIns": [],
+      "children": []
+    }
+  ]
+}
