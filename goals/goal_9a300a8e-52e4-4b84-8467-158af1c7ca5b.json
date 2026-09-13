@@ -23,6 +23,20 @@
       },
       "checkIns": [],
       "children": []
+    },
+    {
+      "id": "node_dd5ca85c-3967-4142-b309-480a44c3d2d7",
+      "title": "1. Social comfort",
+      "comfort": 0,
+      "unlocked": false,
+      "unlockedAt": null,
+      "streak": {
+        "current": 0,
+        "longest": 0,
+        "lastCheckIn": null
+      },
+      "checkIns": [],
+      "children": []
     }
   ]
 }
